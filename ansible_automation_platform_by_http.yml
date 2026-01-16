@@ -1,0 +1,550 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: a571c0d144b14fd4a87a9d9b2aa9fcd6
+      name: Templates/Applications
+  templates:
+    - uuid: ccc5ed50779b42beade16483af5531d7
+      template: 'Ansible Automation Platform by HTTP'
+      name: 'Ansible Automation Platform by HTTP'
+      description: |
+        Monitor Ansible Automation Platform by HTTP.
+        
+        Author: Jorn Ivar Holland
+      groups:
+        - name: Templates/Applications
+      items:
+        - uuid: 808785048bf2467d82cded56122c3a92
+          name: 'API errors'
+          type: DEPENDENT
+          key: aap.api_errors
+          delay: '0'
+          history: 15d
+          value_type: TEXT
+          trends: '0'
+          description: 'A list of errors from API requests.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.errors
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: aap.get.data
+          tags:
+            - tag: component
+              value: raw
+          triggers:
+            - uuid: e81e151360aa4ff295c6d0ec1d5a0653
+              expression: 'length(last(/Ansible Automation Platform by HTTP/aap.api_errors))>0'
+              name: 'AAP: Errors in requests to API'
+              priority: WARNING
+              description: 'Zabbix has received errors from API.'
+              manual_close: 'YES'
+              dependencies:
+                - name: 'AAP: Service is unavailable'
+                  expression: 'max(/Ansible Automation Platform by HTTP/net.tcp.service["{$AAP.API.SCHEME}","{$AAP.API.HOST}","{$AAP.API.PORT}"],5m)=0'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: be5cfc03bbbb43fb96a6ca29e946ff14
+          name: 'Controller license free'
+          type: DEPENDENT
+          key: aap.controller.license_free
+          delay: '0'
+          history: 15d
+          value_type: TEXT
+          trends: '0'
+          description: 'The number of free licenses (instances) on the Ansible Automation Platform controller.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.controller_config.license_info.free_instances
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: aap.get.data
+          tags:
+            - tag: component
+              value: controller
+          triggers:
+            - uuid: 4c7e6f55dbb043b695dc166a222534f8
+              expression: 'last(/Ansible Automation Platform by HTTP/aap.controller.license_free)=0'
+              name: 'AAP: Controller: All licenses have been consumed'
+              priority: AVERAGE
+              description: 'All license (instances) have been consumed. No more hosts can be added to AAP.'
+              tags:
+                - tag: scope
+                  value: capacity
+            - uuid: bedd2b93ae564c8d985905e5737acd6d
+              expression: 'last(/Ansible Automation Platform by HTTP/aap.controller.license_free)<{$AAP.LICENSE.WARN}'
+              name: 'AAP: Controller: The number of free licenses is below {$AAP.LICENSE.WARN}'
+              priority: WARNING
+              description: 'The number of free licenses is below warn limit.'
+              manual_close: 'YES'
+              dependencies:
+                - name: 'AAP: Controller: All licenses have been consumed'
+                  expression: 'last(/Ansible Automation Platform by HTTP/aap.controller.license_free)=0'
+              tags:
+                - tag: scope
+                  value: capacity
+        - uuid: 21cc9e3e57684e24aa35d08b9337595a
+          name: 'Controller version'
+          type: DEPENDENT
+          key: aap.controller.version
+          delay: '0'
+          history: 15d
+          value_type: TEXT
+          trends: '0'
+          description: 'The Ansible Automation Platform Controller version.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.controller_config.version
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: aap.get.data
+          tags:
+            - tag: component
+              value: controller
+          triggers:
+            - uuid: 9ae3145351194587891770cfec43c681
+              expression: |
+                change(/Ansible Automation Platform by HTTP/aap.controller.version)
+                and
+                length(last(/Ansible Automation Platform by HTTP/aap.controller.version))>0
+              name: 'AAP: Controller: Version has changed'
+              priority: INFO
+              description: 'The AAP Controller version has changed. Acknowledge to close the problem manually.'
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: notice
+        - uuid: e425e9e63f7e411b93889f1f381d9487
+          name: 'EDA Status'
+          type: DEPENDENT
+          key: aap.eda.status
+          delay: '0'
+          history: 15d
+          value_type: TEXT
+          trends: '0'
+          description: 'The Ansible Automation Platform EDA API status.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.eda_status.status
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: aap.get.data
+          tags:
+            - tag: component
+              value: eda
+          triggers:
+            - uuid: 9249feb736554e2fb2a919f4481950f2
+              expression: 'last(/Ansible Automation Platform by HTTP/aap.eda.status)<>"good"'
+              name: 'AAP: EDA: Status is not good'
+              priority: WARNING
+              description: 'Please check the Event-Driven Ansible API status.'
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: performance
+        - uuid: 37c0b46ca4a546389b8ec594963f953a
+          name: 'EDA version'
+          type: DEPENDENT
+          key: aap.eda.version
+          delay: '0'
+          history: 15d
+          value_type: TEXT
+          trends: '0'
+          description: 'The Ansible Automation Platform EDA version.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.eda_config.version
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: aap.get.data
+          tags:
+            - tag: component
+              value: eda
+          triggers:
+            - uuid: 8fb73102bac04a90b953744052dfeb40
+              expression: |
+                change(/Ansible Automation Platform by HTTP/aap.eda.version)
+                and
+                length(last(/Ansible Automation Platform by HTTP/aap.eda.version))>0
+              name: 'AAP: EDA: Version has changed'
+              priority: INFO
+              description: 'The EDA version has changed. Acknowledge to close the problem manually.'
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: notice
+        - uuid: 142b0db3f7c547599ba422679e996476
+          name: 'Get data'
+          type: SCRIPT
+          key: aap.get.data
+          delay: 2m
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          params: |
+            var AAP = {
+              params: {},
+            
+              setParams: function (params) {
+                // Validate required parameters and ensure each required field is defined and non-empty.
+                ['token', 'host', 'base_url'].forEach(function (field) {
+                  if (typeof params !== 'object' || typeof params[field] === 'undefined' || params[field] === '') {
+                    throw 'Required param is not set: ' + field + '.';
+                  }
+                });
+            
+                AAP.params = params;
+            
+                // Ensure base_url ends with a trailing slash.
+                if (!AAP.params.base_url.endsWith('/')) {
+                  AAP.params.base_url += '/';
+                }
+              },
+            
+              request: function (path) {
+                var request = new HttpRequest();
+                request.addHeader('Authorization: Bearer ' + AAP.params.token);
+                request.addHeader('Accept: application/json');
+                request.addHeader('Content-Type: application/json');
+            
+                // Send request and get response.
+                var response = request.get(AAP.params.base_url + path);
+            
+                // Check and log HTTP status.
+                var status = request.getStatus();
+                if (status < 200 || status >= 300) {
+                  throw 'HTTP ' + status + ' from AAP API: ' + response;
+                }
+            
+                // Check if response is empty.
+                if (!response) {
+                  throw 'Empty response from AAP API';
+                }
+            
+                // Parse JSON response.
+                try {
+                  return JSON.parse(response);
+                } catch (e) {
+                  throw 'Failed to parse JSON response';
+                }
+              }
+            };
+            
+            var data = {
+              controller_config: {},
+              controller_jobs: [],
+              eda_status: null,
+              eda_config: {},
+              eda_rulebook_activations: [],
+              errors: ''
+            };
+            
+            try {
+              AAP.setParams(JSON.parse(value));
+            
+              // Make requests and store responses.
+              data.controller_config = AAP.request('api/controller/v2/config/');
+            
+              const today = new Date().toISOString().split('T')[0]; // Get today in format YYYY-MM-DD
+              data.controller_jobs = AAP.request('api/controller/v2/jobs/?started__gte=' + today).results;
+            
+              data.eda_status = AAP.request('api/eda/v1/status/');
+              data.eda_config = AAP.request('api/eda/v1/config/');
+              var result = AAP.request('api/eda/v1/activations/');
+              if (!result.results) {
+                throw 'Unexpected API response format';
+              }
+              result.results.forEach(function (activation) {
+                data.eda_rulebook_activations.push({
+                  name: activation.name,
+                  is_enabled: activation.is_enabled,
+                  status: activation.status,
+                });
+              });
+            
+            } catch (error) {
+              // Store error message if one occurs.
+              data.errors = error.toString();
+            }
+            
+            return JSON.stringify(data);
+          description: 'The JSON with the result from requests to API.'
+          timeout: '{$AAP.API.TIMEOUT}'
+          parameters:
+            - name: base_url
+              value: '{$AAP.API.SCHEME}://{$AAP.API.HOST}:{$AAP.API.PORT}'
+            - name: host
+              value: '{$AAP.API.HOST}'
+            - name: token
+              value: '{$AAP.API.TOKEN}'
+          tags:
+            - tag: component
+              value: raw
+        - uuid: b786843fec9c4617ae90de0eb4dac619
+          name: 'Service Ping'
+          type: SIMPLE
+          key: 'net.tcp.service["{$AAP.API.SCHEME}","{$AAP.API.HOST}","{$AAP.API.PORT}"]'
+          history: 15d
+          description: 'Checks if the service is running and accepting the TCP connections.'
+          valuemap:
+            name: 'AAP Service state'
+          preprocessing:
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 10m
+          tags:
+            - tag: component
+              value: health
+            - tag: component
+              value: network
+          triggers:
+            - uuid: 6e30e5bc99af4d8db6e9192ae1432e8d
+              expression: 'max(/Ansible Automation Platform by HTTP/net.tcp.service["{$AAP.API.SCHEME}","{$AAP.API.HOST}","{$AAP.API.PORT}"],5m)=0'
+              name: 'AAP: Service is unavailable'
+              priority: AVERAGE
+              description: 'The API is unavailable.'
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: availability
+      discovery_rules:
+        - uuid: cb62dd8e3c474e818342a1c067261c7c
+          name: 'Controller jobs discovery'
+          type: DEPENDENT
+          key: aap.controller.job
+          delay: '0'
+          description: 'Controller jobs discovery.'
+          item_prototypes:
+            - uuid: 939ef7dbd1044978a7389f278e1beeff
+              name: 'Controller jobs [{#NAME}]: Data'
+              type: DEPENDENT
+              key: 'aap.controller.job.data[{#ID}]'
+              delay: '0'
+              history: '0'
+              value_type: TEXT
+              trends: '0'
+              description: 'JSON with result of controller jobs API request by id.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.controller_jobs[?(@.id == "{#ID}")].first()'
+              master_item:
+                key: aap.get.data
+              tags:
+                - tag: component
+                  value: raw
+            - uuid: c74c0c32ca074efbb9f3c3b6c0e2c75c
+              name: 'Controller job [{#NAME}]: Status'
+              type: DEPENDENT
+              key: 'aap.controller.job.status[{#ID}]'
+              delay: '0'
+              history: 15d
+              trends: '0'
+              description: 'Controller job status.'
+              valuemap:
+                name: 'AAP Controller Job Status'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.failed
+                - type: DISCARD_UNCHANGED
+                  parameters:
+                    - ''
+                - type: BOOL_TO_DECIMAL
+                  parameters:
+                    - ''
+              master_item:
+                key: 'aap.controller.job.data[{#ID}]'
+              tags:
+                - tag: component
+                  value: job
+              trigger_prototypes:
+                - uuid: 1984b72a7ebd4043862a84b363fe6cd2
+                  expression: 'last(/Ansible Automation Platform by HTTP/aap.controller.job.status[{#ID}])=1'
+                  name: 'AAP: Controller: Job "{#NAME}" failed'
+                  priority: INFO
+                  description: 'Job template with name "{#NAME}" and id {#ID} has status failed.'
+                  manual_close: 'YES'
+                  tags:
+                    - tag: scope
+                      value: health
+          master_item:
+            key: aap.get.data
+          lld_macro_paths:
+            - lld_macro: '{#ID}'
+              path: $.id
+            - lld_macro: '{#NAME}'
+              path: $.name
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.controller_jobs
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+        - uuid: fc0b4cb635fc437291a388fd0ca371bb
+          name: 'EDA rulebook activation discovery'
+          type: DEPENDENT
+          key: aap.eda.rulebook_activation
+          delay: '0'
+          description: 'EDA rulebook activation list discovery.'
+          item_prototypes:
+            - uuid: 5bd1a9e4e86f4e0a9dcf0634901b133e
+              name: 'Rulebook activation [{#NAME}]: Admin state'
+              type: DEPENDENT
+              key: 'aap.eda.rulebook_activation.admin_state[{#NAME}]'
+              delay: '0'
+              history: 15d
+              trends: '0'
+              description: 'EDA rulebook activation admin state.'
+              valuemap:
+                name: 'AAP EDA rulebook state'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.is_enabled
+                - type: BOOL_TO_DECIMAL
+                  parameters:
+                    - ''
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: 'aap.eda.rulebook_activation.data[{#NAME}]'
+              tags:
+                - tag: component
+                  value: eda
+              trigger_prototypes:
+                - uuid: b64bec06378644fd8af18f64b966f2a1
+                  expression: 'last(/Ansible Automation Platform by HTTP/aap.eda.rulebook_activation.admin_state[{#NAME}])=0'
+                  name: 'AAP: EDA: Rulebook {#NAME}: Is administratively disabled'
+                  priority: INFO
+                  description: 'The rulebook activation is administratively disabled.'
+                  tags:
+                    - tag: scope
+                      value: notice
+            - uuid: e525f2ca706844fb8cc19947ca1b04c4
+              name: 'Rulebook activation [{#NAME}]: Data'
+              type: DEPENDENT
+              key: 'aap.eda.rulebook_activation.data[{#NAME}]'
+              delay: '0'
+              history: '0'
+              value_type: TEXT
+              trends: '0'
+              description: 'JSON with result of EDA rulebook activation API request by name.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.eda_rulebook_activations[?(@.name == "{#NAME}")].first()'
+              master_item:
+                key: aap.get.data
+              tags:
+                - tag: component
+                  value: raw
+            - uuid: 65285aacbf12428dba67ee8d0fce9812
+              name: 'Rulebook activation [{#NAME}]: Status'
+              type: DEPENDENT
+              key: 'aap.eda.rulebook_activation.status[{#NAME}]'
+              delay: '0'
+              history: 15d
+              value_type: TEXT
+              trends: '0'
+              description: 'EDA rulebook activation status.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.status
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: 'aap.eda.rulebook_activation.data[{#NAME}]'
+              tags:
+                - tag: component
+                  value: eda
+              trigger_prototypes:
+                - uuid: 31d85fb0b323440a90add61a34620316
+                  expression: 'last(/Ansible Automation Platform by HTTP/aap.eda.rulebook_activation.status[{#NAME}])<>"running"'
+                  name: 'AAP: EDA: Rulebook {#NAME}: Is not running'
+                  priority: WARNING
+                  description: 'The rulebook activation is administratively enabled, but is not running.'
+                  dependencies:
+                    - name: 'AAP: EDA: Rulebook {#NAME}: Is administratively disabled'
+                      expression: 'last(/Ansible Automation Platform by HTTP/aap.eda.rulebook_activation.admin_state[{#NAME}])=0'
+                  tags:
+                    - tag: scope
+                      value: availability
+          master_item:
+            key: aap.get.data
+          lld_macro_paths:
+            - lld_macro: '{#NAME}'
+              path: $.name
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.eda_rulebook_activations
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+      tags:
+        - tag: class
+          value: software
+        - tag: target
+          value: aap
+        - tag: target
+          value: ansible
+      macros:
+        - macro: '{$AAP.API.HOST}'
+          description: 'The hostname or IP address of the API host.'
+        - macro: '{$AAP.API.PORT}'
+          value: '443'
+          description: 'The API port.'
+        - macro: '{$AAP.API.SCHEME}'
+          value: https
+          description: 'The API scheme (http/https)'
+        - macro: '{$AAP.API.TIMEOUT}'
+          value: 8s
+          description: 'Response timeout for API.'
+        - macro: '{$AAP.API.TOKEN}'
+          description: 'Specify password for API.'
+        - macro: '{$AAP.LICENSE.WARN}'
+          value: '20'
+          description: 'Trigger if the number of free licenses (instances) is below this limit.'
+      valuemaps:
+        - uuid: 0f2b1e8880a24e1685badca906bc1c4e
+          name: 'AAP Controller Job Status'
+          mappings:
+            - value: '1'
+              newvalue: Failed
+            - value: '0'
+              newvalue: Success
+        - uuid: 21dfff2ecc9344879d8872406f7f5bae
+          name: 'AAP EDA rulebook state'
+          mappings:
+            - value: '1'
+              newvalue: enabled
+            - value: '0'
+              newvalue: disabled
+        - uuid: ba5e85cfffb641f8b2e119cda00b834d
+          name: 'AAP Service state'
+          mappings:
+            - value: '0'
+              newvalue: down
+            - value: '1'
+              newvalue: up
