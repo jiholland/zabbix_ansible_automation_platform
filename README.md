@@ -8,4 +8,4 @@ This [template](https://www.zabbix.com/documentation/current/en/manual/xml_expor
 - job template status
 - rulebook activation (container) status
 
-☕️ Jørn Ivar
+Jørn Ivar (@jiholland)
