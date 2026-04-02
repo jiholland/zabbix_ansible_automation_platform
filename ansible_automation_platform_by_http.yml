@@ -3,6 +3,8 @@ zabbix_export:
   template_groups:
     - uuid: a571c0d144b14fd4a87a9d9b2aa9fcd6
       name: Templates/Applications
+    - uuid: 47ccf470f4bf41aa93b0f1c487d243b0
+      name: 'Templates/Cloud platform'
   templates:
     - uuid: ccc5ed50779b42beade16483af5531d7
       template: 'Ansible Automation Platform by HTTP'
@@ -13,13 +15,13 @@ zabbix_export:
         Author: Jorn Ivar Holland
       groups:
         - name: Templates/Applications
+        - name: 'Templates/Cloud platform'
       items:
         - uuid: 808785048bf2467d82cded56122c3a92
           name: 'API errors'
           type: DEPENDENT
           key: aap.api_errors
           delay: '0'
-          history: 15d
           value_type: TEXT
           trends: '0'
           description: 'A list of errors from API requests.'
@@ -38,7 +40,7 @@ zabbix_export:
           triggers:
             - uuid: e81e151360aa4ff295c6d0ec1d5a0653
               expression: 'length(last(/Ansible Automation Platform by HTTP/aap.api_errors))>0'
-              name: 'AAP: Errors in requests to API'
+              name: 'AAP: Errors in requests to the API'
               priority: WARNING
               description: 'Zabbix has received errors from API.'
               manual_close: 'YES'
@@ -48,12 +50,115 @@ zabbix_export:
               tags:
                 - tag: scope
                   value: availability
+        - uuid: e0490bfaf53c41ea91f3efd705bcbc30
+          name: 'Controller license compliance'
+          type: DEPENDENT
+          key: 'aap.controller.license[compliance]'
+          delay: '0'
+          value_type: TEXT
+          trends: '0'
+          description: 'Boolean that indicates license compliance status.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.controller_config.license_info.compliant
+            - type: BOOL_TO_DECIMAL
+              parameters:
+                - ''
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: aap.get.data
+          tags:
+            - tag: component
+              value: controller
+          triggers:
+            - uuid: 1ca446759e9f4203a7951eff0837ac17
+              expression: 'last(/Ansible Automation Platform by HTTP/aap.controller.license[compliance])=0'
+              name: 'AAP: Controller: License is not compliant'
+              priority: WARNING
+              description: 'The license is not compliant.'
+              dependencies:
+                - name: 'AAP: Controller: All licenses have been consumed'
+                  expression: 'last(/Ansible Automation Platform by HTTP/aap.controller.license[free])=0'
+                - name: 'AAP: Controller: License has expired'
+                  expression: 'last(/Ansible Automation Platform by HTTP/aap.controller.license[expired])=1'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: 33b18fa4dc114eb6b1a29626d2c7df63
+          name: 'Controller license warning'
+          type: DEPENDENT
+          key: 'aap.controller.license[end]'
+          delay: '0'
+          value_type: TEXT
+          trends: '0'
+          description: 'Boolean that becomes true if there is less than 30 days remaining before the subscription expires.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.controller_config.license_info.date_warning
+            - type: BOOL_TO_DECIMAL
+              parameters:
+                - ''
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: aap.get.data
+          tags:
+            - tag: component
+              value: controller
+          triggers:
+            - uuid: 031ac9c839f1488088b5ed1ab94665ca
+              expression: 'last(/Ansible Automation Platform by HTTP/aap.controller.license[end])=1'
+              name: 'AAP: Controller: License is about to expire'
+              priority: WARNING
+              description: 'Less than 30 days until the license (subscription) expires.'
+              dependencies:
+                - name: 'AAP: Controller: License has expired'
+                  expression: 'last(/Ansible Automation Platform by HTTP/aap.controller.license[expired])=1'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: 17111dcdc68747809bba835ba02d0b33
+          name: 'Controller license expired'
+          type: DEPENDENT
+          key: 'aap.controller.license[expired]'
+          delay: '0'
+          value_type: TEXT
+          trends: '0'
+          description: 'Boolean that becomes true if the subscription has expired.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.controller_config.license_info.date_expired
+            - type: BOOL_TO_DECIMAL
+              parameters:
+                - ''
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+          master_item:
+            key: aap.get.data
+          tags:
+            - tag: component
+              value: controller
+          triggers:
+            - uuid: 002cbed5bdb74c5bb88fb14245ed14a1
+              expression: 'last(/Ansible Automation Platform by HTTP/aap.controller.license[expired])=1'
+              name: 'AAP: Controller: License has expired'
+              priority: HIGH
+              description: 'The license (subscription) has expired.'
+              tags:
+                - tag: scope
+                  value: availability
         - uuid: be5cfc03bbbb43fb96a6ca29e946ff14
           name: 'Controller license free'
           type: DEPENDENT
-          key: aap.controller.license_free
+          key: 'aap.controller.license[free]'
           delay: '0'
-          history: 15d
           value_type: TEXT
           trends: '0'
           description: 'The number of free licenses (instances) on the Ansible Automation Platform controller.'
@@ -71,7 +176,7 @@ zabbix_export:
               value: controller
           triggers:
             - uuid: 4c7e6f55dbb043b695dc166a222534f8
-              expression: 'last(/Ansible Automation Platform by HTTP/aap.controller.license_free)=0'
+              expression: 'last(/Ansible Automation Platform by HTTP/aap.controller.license[free])=0'
               name: 'AAP: Controller: All licenses have been consumed'
               priority: AVERAGE
               description: 'All license (instances) have been consumed. No more hosts can be added to AAP.'
@@ -79,14 +184,16 @@ zabbix_export:
                 - tag: scope
                   value: capacity
             - uuid: bedd2b93ae564c8d985905e5737acd6d
-              expression: 'last(/Ansible Automation Platform by HTTP/aap.controller.license_free)<{$AAP.LICENSE.WARN}'
-              name: 'AAP: Controller: The number of free licenses is below {$AAP.LICENSE.WARN}'
+              expression: 'last(/Ansible Automation Platform by HTTP/aap.controller.license[free])<{$AAP.LICENSE.WARN}'
+              name: 'AAP: Controller: The number of free licenses are low'
+              event_name: 'AAP: Controller: The number of free licenses are low (<{$AAP.LICENSE.WARN})'
+              opdata: 'Current value: {ITEM.LASTVALUE1}'
               priority: WARNING
-              description: 'The number of free licenses is below warn limit.'
+              description: 'The number of free licenses is below the warning limit.'
               manual_close: 'YES'
               dependencies:
                 - name: 'AAP: Controller: All licenses have been consumed'
-                  expression: 'last(/Ansible Automation Platform by HTTP/aap.controller.license_free)=0'
+                  expression: 'last(/Ansible Automation Platform by HTTP/aap.controller.license[free])=0'
               tags:
                 - tag: scope
                   value: capacity
@@ -95,7 +202,6 @@ zabbix_export:
           type: DEPENDENT
           key: aap.controller.version
           delay: '0'
-          history: 15d
           value_type: TEXT
           trends: '0'
           description: 'The Ansible Automation Platform Controller version.'
@@ -124,43 +230,11 @@ zabbix_export:
               tags:
                 - tag: scope
                   value: notice
-        - uuid: e425e9e63f7e411b93889f1f381d9487
-          name: 'EDA Status'
-          type: DEPENDENT
-          key: aap.eda.status
-          delay: '0'
-          history: 15d
-          value_type: TEXT
-          trends: '0'
-          description: 'The Ansible Automation Platform EDA API status.'
-          preprocessing:
-            - type: JSONPATH
-              parameters:
-                - $.eda_status.status
-            - type: DISCARD_UNCHANGED_HEARTBEAT
-              parameters:
-                - 1h
-          master_item:
-            key: aap.get.data
-          tags:
-            - tag: component
-              value: eda
-          triggers:
-            - uuid: 9249feb736554e2fb2a919f4481950f2
-              expression: 'last(/Ansible Automation Platform by HTTP/aap.eda.status)<>"good"'
-              name: 'AAP: EDA: Status is not good'
-              priority: WARNING
-              description: 'Please check the Event-Driven Ansible API status.'
-              manual_close: 'YES'
-              tags:
-                - tag: scope
-                  value: performance
         - uuid: 37c0b46ca4a546389b8ec594963f953a
           name: 'EDA version'
           type: DEPENDENT
           key: aap.eda.version
           delay: '0'
-          history: 15d
           value_type: TEXT
           trends: '0'
           description: 'The Ansible Automation Platform EDA version.'
@@ -198,7 +272,7 @@ zabbix_export:
           value_type: TEXT
           trends: '0'
           params: |
-            var AAP = {
+            const AAP = {
               params: {},
             
               setParams: function (params) {
@@ -218,16 +292,16 @@ zabbix_export:
               },
             
               request: function (path) {
-                var request = new HttpRequest();
+                const request = new HttpRequest();
                 request.addHeader('Authorization: Bearer ' + AAP.params.token);
                 request.addHeader('Accept: application/json');
                 request.addHeader('Content-Type: application/json');
             
                 // Send request and get response.
-                var response = request.get(AAP.params.base_url + path);
+                const response = request.get(AAP.params.base_url + path);
             
                 // Check and log HTTP status.
-                var status = request.getStatus();
+                const status = request.getStatus();
                 if (status < 200 || status >= 300) {
                   throw 'HTTP ' + status + ' from AAP API: ' + response;
                 }
@@ -246,10 +320,9 @@ zabbix_export:
               }
             };
             
-            var data = {
+            const data = {
               controller_config: {},
               controller_jobs: [],
-              eda_status: null,
               eda_config: {},
               eda_rulebook_activations: [],
               errors: ''
@@ -264,9 +337,8 @@ zabbix_export:
               const today = new Date().toISOString().split('T')[0]; // Get today in format YYYY-MM-DD
               data.controller_jobs = AAP.request('api/controller/v2/jobs/?started__gte=' + today).results;
             
-              data.eda_status = AAP.request('api/eda/v1/status/');
               data.eda_config = AAP.request('api/eda/v1/config/');
-              var result = AAP.request('api/eda/v1/activations/');
+              const result = AAP.request('api/eda/v1/activations/');
               if (!result.results) {
                 throw 'Unexpected API response format';
               }
@@ -300,10 +372,9 @@ zabbix_export:
           name: 'Service Ping'
           type: SIMPLE
           key: 'net.tcp.service["{$AAP.API.SCHEME}","{$AAP.API.HOST}","{$AAP.API.PORT}"]'
-          history: 15d
           description: 'Checks if the service is running and accepting the TCP connections.'
           valuemap:
-            name: 'AAP Service state'
+            name: 'AAP service state'
           preprocessing:
             - type: DISCARD_UNCHANGED_HEARTBEAT
               parameters:
@@ -327,7 +398,7 @@ zabbix_export:
         - uuid: cb62dd8e3c474e818342a1c067261c7c
           name: 'Controller jobs discovery'
           type: DEPENDENT
-          key: aap.controller.job
+          key: aap.controller.job.discovery
           delay: '0'
           description: 'Controller jobs discovery.'
           item_prototypes:
@@ -354,11 +425,10 @@ zabbix_export:
               type: DEPENDENT
               key: 'aap.controller.job.status[{#ID}]'
               delay: '0'
-              history: 15d
               trends: '0'
               description: 'Controller job status.'
               valuemap:
-                name: 'AAP Controller Job Status'
+                name: 'AAP controller job status'
               preprocessing:
                 - type: JSONPATH
                   parameters:
@@ -379,11 +449,11 @@ zabbix_export:
                   expression: 'last(/Ansible Automation Platform by HTTP/aap.controller.job.status[{#ID}])=1'
                   name: 'AAP: Controller: Job "{#NAME}" failed'
                   priority: INFO
-                  description: 'Job template with name "{#NAME}" and id {#ID} has status failed.'
+                  description: 'Job template with name "{#NAME}" and id {#ID} has status failed. Acknowledge to close manually.'
                   manual_close: 'YES'
                   tags:
                     - tag: scope
-                      value: health
+                      value: notice
           master_item:
             key: aap.get.data
           lld_macro_paths:
@@ -401,16 +471,33 @@ zabbix_export:
         - uuid: fc0b4cb635fc437291a388fd0ca371bb
           name: 'EDA rulebook activation discovery'
           type: DEPENDENT
-          key: aap.eda.rulebook_activation
+          key: aap.eda.rulebook.discovery
           delay: '0'
           description: 'EDA rulebook activation list discovery.'
           item_prototypes:
+            - uuid: e525f2ca706844fb8cc19947ca1b04c4
+              name: 'Rulebook activation [{#NAME}]: Data'
+              type: DEPENDENT
+              key: 'aap.eda.rulebook.data[{#NAME}]'
+              delay: '0'
+              history: '0'
+              value_type: TEXT
+              trends: '0'
+              description: 'JSON with result of EDA rulebook activation API request by name.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.eda_rulebook_activations[?(@.name == "{#NAME}")].first()'
+              master_item:
+                key: aap.get.data
+              tags:
+                - tag: component
+                  value: raw
             - uuid: 5bd1a9e4e86f4e0a9dcf0634901b133e
               name: 'Rulebook activation [{#NAME}]: Admin state'
               type: DEPENDENT
-              key: 'aap.eda.rulebook_activation.admin_state[{#NAME}]'
+              key: 'aap.eda.rulebook.state[{#NAME}]'
               delay: '0'
-              history: 15d
               trends: '0'
               description: 'EDA rulebook activation admin state.'
               valuemap:
@@ -426,43 +513,24 @@ zabbix_export:
                   parameters:
                     - 1h
               master_item:
-                key: 'aap.eda.rulebook_activation.data[{#NAME}]'
+                key: 'aap.eda.rulebook.data[{#NAME}]'
               tags:
                 - tag: component
                   value: eda
               trigger_prototypes:
                 - uuid: b64bec06378644fd8af18f64b966f2a1
-                  expression: 'last(/Ansible Automation Platform by HTTP/aap.eda.rulebook_activation.admin_state[{#NAME}])=0'
+                  expression: 'last(/Ansible Automation Platform by HTTP/aap.eda.rulebook.state[{#NAME}])=0'
                   name: 'AAP: EDA: Rulebook {#NAME}: Is administratively disabled'
                   priority: INFO
                   description: 'The rulebook activation is administratively disabled.'
                   tags:
                     - tag: scope
                       value: notice
-            - uuid: e525f2ca706844fb8cc19947ca1b04c4
-              name: 'Rulebook activation [{#NAME}]: Data'
-              type: DEPENDENT
-              key: 'aap.eda.rulebook_activation.data[{#NAME}]'
-              delay: '0'
-              history: '0'
-              value_type: TEXT
-              trends: '0'
-              description: 'JSON with result of EDA rulebook activation API request by name.'
-              preprocessing:
-                - type: JSONPATH
-                  parameters:
-                    - '$.eda_rulebook_activations[?(@.name == "{#NAME}")].first()'
-              master_item:
-                key: aap.get.data
-              tags:
-                - tag: component
-                  value: raw
             - uuid: 65285aacbf12428dba67ee8d0fce9812
               name: 'Rulebook activation [{#NAME}]: Status'
               type: DEPENDENT
-              key: 'aap.eda.rulebook_activation.status[{#NAME}]'
+              key: 'aap.eda.rulebook.status[{#NAME}]'
               delay: '0'
-              history: 15d
               value_type: TEXT
               trends: '0'
               description: 'EDA rulebook activation status.'
@@ -474,19 +542,20 @@ zabbix_export:
                   parameters:
                     - 1h
               master_item:
-                key: 'aap.eda.rulebook_activation.data[{#NAME}]'
+                key: 'aap.eda.rulebook.data[{#NAME}]'
               tags:
                 - tag: component
                   value: eda
               trigger_prototypes:
                 - uuid: 31d85fb0b323440a90add61a34620316
-                  expression: 'last(/Ansible Automation Platform by HTTP/aap.eda.rulebook_activation.status[{#NAME}])<>"running"'
+                  expression: 'last(/Ansible Automation Platform by HTTP/aap.eda.rulebook.status[{#NAME}])<>"running"'
                   name: 'AAP: EDA: Rulebook {#NAME}: Is not running'
+                  opdata: 'Current status: {ITEM.LASTVALUE1}'
                   priority: WARNING
                   description: 'The rulebook activation is administratively enabled, but is not running.'
                   dependencies:
                     - name: 'AAP: EDA: Rulebook {#NAME}: Is administratively disabled'
-                      expression: 'last(/Ansible Automation Platform by HTTP/aap.eda.rulebook_activation.admin_state[{#NAME}])=0'
+                      expression: 'last(/Ansible Automation Platform by HTTP/aap.eda.rulebook.state[{#NAME}])=0'
                   tags:
                     - tag: scope
                       value: availability
@@ -528,7 +597,7 @@ zabbix_export:
           description: 'Trigger if the number of free licenses (instances) is below this limit.'
       valuemaps:
         - uuid: 0f2b1e8880a24e1685badca906bc1c4e
-          name: 'AAP Controller Job Status'
+          name: 'AAP controller job status'
           mappings:
             - value: '1'
               newvalue: Failed
@@ -542,7 +611,7 @@ zabbix_export:
             - value: '0'
               newvalue: disabled
         - uuid: ba5e85cfffb641f8b2e119cda00b834d
-          name: 'AAP Service state'
+          name: 'AAP service state'
           mappings:
             - value: '0'
               newvalue: down
